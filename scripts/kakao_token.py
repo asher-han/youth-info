@@ -103,7 +103,7 @@ def _post_token(form: dict) -> dict:
         # 2025년 이후 발급된 REST API 키는 클라이언트 시크릿이 기본 활성화라
         # 이 값 없이는 KOE010 으로 실패합니다.
         print("⚠️  KAKAO_CLIENT_SECRET 이 비어 있습니다. "
-              "실패하면 docs/01-kakao-setup.md 1-1 을 확인하세요.")
+              "실패하면 docs/01-kakao-setup.md 2번을 확인하세요.")
     status, text = http(TOKEN_URL, data=form)
     try:
         payload = json.loads(text)
@@ -141,7 +141,7 @@ def refresh(force: bool = False) -> dict:
         return token
     if token.get("refresh_expires_at") and token["refresh_expires_at"] < now:
         die("refresh_token 이 만료됐습니다. 브라우저 동의가 필요합니다 "
-            "(docs/01-kakao-setup.md 5~6번).")
+            "(docs/01-kakao-setup.md 6~7번).")
     payload = _post_token({
         "grant_type": "refresh_token",
         "refresh_token": token["refresh_token"],
@@ -176,11 +176,11 @@ def show() -> None:
 # 토큰 엔드포인트가 가짜 인가코드에 돌려주는 오류코드로 앱 설정 상태를 역추적한다.
 _CHECK_HINTS = {
     "KOE320": "✅ REST API 키·Client Secret 정상. 남은 것은 브라우저 동의 → init 뿐입니다 "
-              "(docs/01-kakao-setup.md 5~6번).",
+              "(docs/01-kakao-setup.md 6~7번).",
     "KOE004": "❌ 카카오 로그인 활성화가 OFF 입니다. 키는 정상이니 "
               "제품 설정 → 카카오 로그인 → 활성화 설정 ON (docs/01-kakao-setup.md 3번).",
     "KOE101": "❌ REST API 키가 잘못됐습니다 (docs/01-kakao-setup.md 1번).",
-    "KOE010": "❌ Client Secret 누락/불일치 (docs/01-kakao-setup.md 1-1).",
+    "KOE010": "❌ Client Secret 누락/불일치 (docs/01-kakao-setup.md 2번).",
 }
 
 
