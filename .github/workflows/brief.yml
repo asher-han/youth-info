@@ -1,0 +1,126 @@
+name: 청년정책 브리핑
+
+on:
+  schedule:
+    # UTC 기준입니다. 22:00 UTC = 다음날 07:00 KST
+    # 매일:   '0 22 * * *'
+    # 주 1회: '0 22 * * 0'  (일요일 22:00 UTC = 월요일 07:00 KST)
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '발송하지 않고 내용만 확인'
+        type: boolean
+        default: true
+      send_when_empty:
+        description: '신규 0건이어도 발송'
+        type: boolean
+        default: false
+
+# 스케줄과 수동 실행이 겹쳐 seen.json 을 동시에 밀지 않도록
+concurrency:
+  group: youth-brief
+  cancel-in-progress: false
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # seen.json 커밋용
+    env:
+      KAKAO_REST_API_KEY:  ${{ secrets.KAKAO_REST_API_KEY }}
+      KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+      KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+      YOUTH_API_KEY:       ${{ secrets.YOUTH_API_KEY }}
+      # 개인 조건은 비밀이 아니므로 Variables 로 둡니다 (Settings > Secrets and variables > Actions > Variables)
+      YOUTH_SIDO:          ${{ vars.YOUTH_SIDO }}
+      YOUTH_SIDO_CODE:     ${{ vars.YOUTH_SIDO_CODE }}
+      YOUTH_SIGUNGU:       ${{ vars.YOUTH_SIGUNGU }}
+      YOUTH_SIGUNGU_CODE:  ${{ vars.YOUTH_SIGUNGU_CODE }}
+      YOUTH_AGE_MIN:       ${{ vars.YOUTH_AGE_MIN }}
+      YOUTH_AGE_MAX:       ${{ vars.YOUTH_AGE_MAX }}
+      YOUTH_INTERESTS:     ${{ vars.YOUTH_INTERESTS }}
+      YOUTH_LOCAL_BOARD:   ${{ vars.YOUTH_LOCAL_BOARD }}
+      YOUTH_LOOKBACK_DAYS: ${{ vars.YOUTH_LOOKBACK_DAYS }}
+      YOUTH_MAX_ITEMS:     ${{ vars.YOUTH_MAX_ITEMS }}
+      # 회전된 refresh_token 을 받을 경로. 저장소 밖이라 커밋될 수 없습니다.
+      # (runner 컨텍스트는 job 레벨 env 에서 못 쓰므로 고정 경로를 씁니다)
+      KAKAO_ROTATED_TOKEN_FILE: /tmp/kakao_rotated_token
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 사전 점검
+        run: |
+          if [ -z "$KAKAO_REST_API_KEY" ] || [ -z "$KAKAO_REFRESH_TOKEN" ]; then
+            echo "::error::KAKAO_REST_API_KEY / KAKAO_REFRESH_TOKEN secret 이 비어 있습니다. README 의 설정 단계를 확인하세요."
+            exit 1
+          fi
+
+      - name: 수집
+        run: python3 scripts/fetch.py --verbose
+
+      - name: 브리핑 생성
+        id: build
+        env:
+          SEND_WHEN_EMPTY: ${{ inputs.send_when_empty }}
+        run: |
+          # 이미 보낸 항목은 빼고 신규만 담습니다.
+          python3 scripts/build_brief.py --new-only
+          COUNT=$(python3 -c "import json;print(len(json.load(open('data/brief.json'))['items']))")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "### 신규 $COUNT 건" >> "$GITHUB_STEP_SUMMARY"
+          python3 -c "
+          import json
+          for i in json.load(open('data/brief.json'))['items']:
+              print(f\"- [{i['interest']}] {i['title']}\")
+          " >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -eq 0 ] && [ "$SEND_WHEN_EMPTY" != "true" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "신규 0건 — 발송을 건너뜁니다."
+          fi
+
+      - name: 발송 (dry-run)
+        if: steps.build.outputs.skip != 'true' && inputs.dry_run == true
+        run: python3 scripts/kakao_send.py --brief data/brief.json --dry-run
+
+      - name: 발송
+        if: steps.build.outputs.skip != 'true' && inputs.dry_run != true
+        run: python3 scripts/kakao_send.py --brief data/brief.json
+
+      - name: 중복방지 기록 갱신
+        if: steps.build.outputs.skip != 'true' && inputs.dry_run != true
+        run: python3 scripts/fetch.py --commit-seen --brief data/brief.json
+
+      - name: seen.json 커밋
+        if: steps.build.outputs.skip != 'true' && inputs.dry_run != true
+        run: |
+          # seen.json 은 sha1 해시 목록입니다. 이름·연락처는 없지만 원본이 공개 정책
+          # 목록이라 해시를 되돌릴 수 있어, 공개 저장소에서는 "내가 받은 정책"이 드러납니다.
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/seen.json
+          git diff --staged --quiet && { echo "변경 없음"; exit 0; }
+          git commit -m "chore: 발송 기록 갱신 [skip ci]"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: refresh_token 회전 반영
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          ROTATED="$KAKAO_ROTATED_TOKEN_FILE"
+          [ -f "$ROTATED" ] || exit 0
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::refresh_token 이 회전했는데 GH_PAT secret 이 없어 저장할 수 없습니다. 지금 갱신하지 않으면 최대 1개월 뒤 발송이 끊깁니다. README 의 '토큰 회전' 항목을 보세요."
+            exit 1
+          fi
+          # --body 로 넘기면 토큰이 프로세스 인자로 남으므로 stdin 으로 전달합니다.
+          gh secret set KAKAO_REFRESH_TOKEN < "$ROTATED"
+          shred -u "$ROTATED" 2>/dev/null || rm -f "$ROTATED"
+          echo "✅ KAKAO_REFRESH_TOKEN secret 갱신 완료"
