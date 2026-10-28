@@ -85,5 +85,5 @@ Workflow permissions 가 읽기 전용으로 잠겨 있지 않은지 확인하�
 발송 후 `python3 scripts/fetch.py --commit-seen --brief data/brief.json` 을
 실행해야 합니다.
 
-**한 번에 12건까지만 온다** — 의도된 동작입니다. 남은 건은 다음 회차에
+**한 번에 20건까지만 온다** — 의도된 동작입니다. 남은 건은 다음 회차에
 이어서 나갑니다. `YOUTH_MAX_ITEMS` 로 조절하세요.

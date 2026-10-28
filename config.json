@@ -99,7 +99,7 @@
     "체계 강화",
     "국정대화"
   ],
-  "max_items_per_message": 12,
+  "max_items_per_message": 20,
   "lookback_days": 14,
   "local_board": "dongjak"
 }

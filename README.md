@@ -100,7 +100,7 @@ Access Token 을 갱신해 씁니다.
 | `YOUTH_JOB` / `YOUTH_EDUCATION` / `YOUTH_MAJOR` / `YOUTH_MARRIAGE` | `*` | 취업상태 / 학력 / 전공 / 결혼. 예: `미취업자,재직자` · `대학 졸업` · `미혼`. 라벨 목록은 `.env.example` |
 | `YOUTH_LOCAL_BOARD` | dongjak | 지자체 게시판. 해당 없으면 `none` |
 | `YOUTH_LOOKBACK_DAYS` | 14 | 며칠 이내 공고까지 |
-| `YOUTH_MAX_ITEMS` | 12 | 한 번에 보낼 최대 건수 |
+| `YOUTH_MAX_ITEMS` | 20 | 한 번에 보낼 최대 건수 (900자 넘으면 여러 메시지로 나뉨) |
 
 법정동 코드는 [행정표준코드관리시스템](https://www.code.go.kr)에서 찾을 수 있습니다.
 

@@ -89,7 +89,7 @@ def build(max_items: int, new_only: bool) -> dict:
 if __name__ == "__main__":
     cfg = load_config()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--max", type=int, default=int(cfg.get("max_items_per_message", 12)))
+    ap.add_argument("--max", type=int, default=int(cfg.get("max_items_per_message", 20)))
     ap.add_argument("--new-only", action="store_true", help="신규 항목만 담기")
     a = ap.parse_args()
 
